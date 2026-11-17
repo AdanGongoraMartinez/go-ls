@@ -17,12 +17,12 @@ type options struct {
 }
 
 func main() {
-	path := "."
+	dir := "."
 	var opt options
 
 	for _, arg := range os.Args[1:] {
 		if !strings.HasPrefix(arg, "-") {
-			path = arg
+			dir = arg
 			continue
 		}
 		// -l -la -a
@@ -39,7 +39,7 @@ func main() {
 		}
 	}
 
-	entries, err := readEntries(path, opt)
+	entries, err := readEntries(dir, opt)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
