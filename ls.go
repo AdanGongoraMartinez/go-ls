@@ -25,7 +25,6 @@ func main() {
 			dir = arg
 			continue
 		}
-		// -l -la -a
 		for _, char := range arg[1:] {
 			switch char {
 			case 'a':
