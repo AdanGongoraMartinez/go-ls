@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-type entry struct {
-	name  string
-	mode  os.FileMode
-	nlink uint64
-	owner string
-	group string
-	size  int64
-	mtime time.Time
-	link  string
-	err   error
+type Entry struct {
+	Name  string
+	Mode  os.FileMode
+	Nlink uint64
+	Owner string
+	Group string
+	Size  int64
+	Mtime time.Time
+	Link  string
+	Err   error
 }

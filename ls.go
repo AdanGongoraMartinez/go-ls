@@ -1,21 +1,24 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
-var nlinkWidth, ownerWidth, groupWidth, fsizeWidth, mtimeWidth int
+type options struct {
+	all  bool // -a
+	long bool // -l
+}
 
 func main() {
 	path := "."
-	showAll := false
-	longFormat := false
+	opt := options{all: false, long: false}
 
 	for _, arg := range os.Args[1:] {
 		if !strings.HasPrefix(arg, "-") {
@@ -26,9 +29,9 @@ func main() {
 		for _, char := range arg[1:] {
 			switch char {
 			case 'a':
-				showAll = true
+				opt.all = true
 			case 'l':
-				longFormat = true
+				opt.long = true
 			default:
 				fmt.Fprintf(os.Stderr, "usage: %s [-a] [path]\n", os.Args[0])
 				os.Exit(1)
@@ -36,44 +39,19 @@ func main() {
 		}
 	}
 
-	entries, err := os.ReadDir(path)
+	entries, err := readEntries(path, opt)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	var names []string
-	if showAll {
-		names = append(names, ".", "..")
-	}
+	w := bufio.NewWriter(os.Stdout)
+	defer w.Flush()
 
-	for _, entry := range entries {
-		if !showAll && strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		names = append(names, entry.Name())
-	}
-
-	if longFormat {
-		setWidths(path, names)
-		for _, name := range names {
-			printLong(path, name)
-		}
+	if opt.long {
+		renderLong(w, entries)
 	} else {
-		for _, name := range names {
-			fmt.Println(name)
-		}
-	}
-}
-
-func setWidths(dir string, names []string) {
-	for _, name := range names {
-		_, nlink, owner, group, fsize, mtime := getLong(dir, &name)
-		nlinkWidth = max(nlinkWidth, len(strconv.Itoa(int(nlink))))
-		ownerWidth = max(ownerWidth, len(owner))
-		groupWidth = max(groupWidth, len(group))
-		fsizeWidth = max(fsizeWidth, len(strconv.Itoa(int(fsize))))
-		mtimeWidth = max(mtimeWidth, len(mtime))
+		renderShort(w, entries)
 	}
 }
 
@@ -126,45 +104,83 @@ func pick(actual, conExec, conBit, sinBit byte) byte {
 	return sinBit
 }
 
-func getLong(dir string, name *string) (modestr string, nlink uint64, owner, group string, fsize int64, mtime string) {
-	fullpath := filepath.Join(dir, *name)
-	fileInfo, err := os.Lstat(fullpath)
+func readEntries(dir string, opts options) ([]Entry, error) {
+	dirents, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", *name, err)
-		return
+		return nil, err
 	}
 
-	fileStats := fileInfo.Sys().(*syscall.Stat_t)
+	ids := &idCache{users: map[uint32]string{}, groups: map[uint32]string{}}
+	out := make([]Entry, 0, len(dirents)+2)
 
-	owner, group = "?", "?"
-
-	if u, err := user.LookupId(strconv.Itoa(int(fileStats.Uid))); err == nil {
-		owner = u.Username
-	}
-	if g, err := user.LookupGroupId(strconv.Itoa(int(fileStats.Gid))); err == nil {
-		group = g.Name
-	}
-
-	if fileStats.Mode&syscall.S_IFLNK == syscall.S_IFLNK {
-		target, err := os.Readlink(fullpath)
-		if err == nil {
-			*name += " -> " + target
+	for _, de := range dirents {
+		if !opts.all && strings.HasPrefix(de.Name(), ".") {
+			continue
 		}
-	}
+		e := Entry{Name: de.Name()}
+		info, err := de.Info() // 1 solo Lstat por entrada, no 2
+		if err != nil {
+			e.Err = err
+			out = append(out, e)
+			continue
+		}
+		e.Mode = info.Mode()
+		e.Size = info.Size()
+		e.Mtime = info.ModTime()
 
-	return modeString(fileInfo.Mode()), fileStats.Nlink, owner, group, fileInfo.Size(), fileInfo.ModTime().Format("Jan _2 15:04")
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			e.Nlink = st.Nlink
+			e.Owner = ids.userName(st.Uid)
+			e.Group = ids.groupName(st.Gid)
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			if target, err := os.Readlink(filepath.Join(dir, de.Name())); err == nil {
+				e.Link = target
+			}
+		}
+		out = append(out, e)
+	}
+	return out, nil
 }
 
-func printLong(dir, name string) {
-	modestr, nlink, owner, group, fsize, mtime := getLong(dir, &name)
+func renderShort(w io.Writer, entries []Entry) {
+	for _, e := range entries {
+		if e.Err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", e.Name, e.Err)
+			continue
+		}
 
-	fmt.Printf("%s %*d %*s %*s %*d %*s %s\n",
-		modestr,
-		nlinkWidth, nlink,
-		ownerWidth, owner,
-		groupWidth, group,
-		fsizeWidth, fsize,
-		mtimeWidth, mtime,
-		name,
-	)
+		fmt.Fprintf(w, "%s  ", e.Name)
+	}
+}
+
+func renderLong(w io.Writer, entries []Entry) {
+	var wNlink, wOwner, wGroup, wSize int
+	for _, e := range entries {
+		wNlink = max(wNlink, len(strconv.FormatUint(e.Nlink, 10)))
+		wOwner = max(wOwner, len(e.Owner))
+		wGroup = max(wGroup, len(e.Group))
+		wSize = max(wSize, len(strconv.FormatInt(e.Size, 10)))
+	}
+
+	for _, e := range entries {
+		if e.Err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", e.Name, e.Err)
+			continue
+		}
+		name := e.Name
+		if e.Link != "" {
+			name += " -> " + e.Link
+		}
+		fmt.Fprintf(w, "%s %*d %-*s %-*s %*d %s %s\n",
+			modeString(e.Mode),
+			wNlink, e.Nlink,
+			wOwner, e.Owner,
+			wGroup, e.Group,
+			wSize, e.Size,
+			e.Mtime.Format("Jan _2 15:04"),
+			name,
+		)
+	}
 }
