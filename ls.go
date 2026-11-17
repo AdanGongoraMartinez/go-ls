@@ -182,7 +182,7 @@ func readEntries(dir string, opts options) ([]Entry, error) {
 func renderShort(w io.Writer, entries []Entry) {
 	for _, e := range entries {
 		if e.Err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", e.Name, e.Err)
+			fmt.Fprintf(w, "%s: %v\n", e.Name, e.Err)
 			continue
 		}
 
@@ -201,7 +201,7 @@ func renderLong(w io.Writer, entries []Entry) {
 
 	for _, e := range entries {
 		if e.Err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", e.Name, e.Err)
+			fmt.Fprintf(w, "%s: %v\n", e.Name, e.Err)
 			continue
 		}
 		name := e.Name
