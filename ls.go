@@ -8,8 +8,23 @@ import (
 
 func main() {
 	path := "."
-	if len(os.Args) > 1 {
-		path = os.Args[1]
+	showAll := false
+
+	for _, arg := range os.Args[1:] {
+		if !strings.HasPrefix(arg, "-") {
+			path = arg
+			continue
+		}
+		// -l -la -a
+		for _, char := range arg[1:] {
+			switch char {
+			case 'a':
+				showAll = true
+			default:
+				fmt.Fprint(os.Stderr, "usage: %s [-a] [path]\n", os.Args[0])
+				os.Exit(1)
+			}
+		}
 	}
 
 	entries, err := os.ReadDir(path)
@@ -19,7 +34,7 @@ func main() {
 	}
 
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
+		if !showAll && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 		fmt.Println(entry.Name())
