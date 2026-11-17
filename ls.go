@@ -101,11 +101,12 @@ func printLong(dir, name string) {
 		group = g.Name
 	}
 
-	fmt.Println(
+	fmt.Printf("%s %d %s %s %d %s %s\n",
 		modeString(fileStats.Mode),
 		fileStats.Nlink,
 		owner,
 		group,
 		fileInfo.Size(),
+		fileInfo.ModTime().Format("Jan _2 15:04"),
 		name)
 }
