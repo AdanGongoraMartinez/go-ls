@@ -18,7 +18,7 @@ type options struct {
 
 func main() {
 	path := "."
-	opt := options{all: false, long: false}
+	var opt options
 
 	for _, arg := range os.Args[1:] {
 		if !strings.HasPrefix(arg, "-") {
