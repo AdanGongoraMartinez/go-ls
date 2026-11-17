@@ -10,6 +10,8 @@ import (
 	"syscall"
 )
 
+var nlinkWidth, ownerWidth, groupWidth, fsizeWidth, mtimeWidth int
+
 func main() {
 	path := "."
 	showAll := false
@@ -52,12 +54,26 @@ func main() {
 		names = append(names, entry.Name())
 	}
 
-	for _, name := range names {
-		if longFormat {
+	if longFormat {
+		setWidths(path, names)
+		for _, name := range names {
 			printLong(path, name)
-		} else {
+		}
+	} else {
+		for _, name := range names {
 			fmt.Println(name)
 		}
+	}
+}
+
+func setWidths(dir string, names []string) {
+	for _, name := range names {
+		_, nlink, owner, group, fsize, mtime := getLong(dir, name)
+		nlinkWidth = max(nlinkWidth, len(strconv.Itoa(int(nlink))))
+		ownerWidth = max(ownerWidth, len(owner))
+		groupWidth = max(groupWidth, len(group))
+		fsizeWidth = max(fsizeWidth, len(strconv.Itoa(int(fsize))))
+		mtimeWidth = max(mtimeWidth, len(mtime))
 	}
 }
 
@@ -81,7 +97,7 @@ func modeString(mode uint32) string {
 	return string(s[:1]) + os.FileMode(mode).Perm().String()[1:]
 }
 
-func printLong(dir, name string) {
+func getLong(dir, name string) (modestr string, nlink uint64, owner, group string, fsize int64, mtime string) {
 	fileInfo, err := os.Lstat(filepath.Join(dir, name))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
@@ -90,22 +106,32 @@ func printLong(dir, name string) {
 
 	fileStats := fileInfo.Sys().(*syscall.Stat_t)
 
-	owner, group := "?", "?"
-	u, err := user.LookupId(strconv.Itoa(int(fileStats.Uid)))
-	if err == nil {
+	owner, group = "?", "?"
+
+	if u, err := user.LookupId(strconv.Itoa(int(fileStats.Uid))); err == nil {
 		owner = u.Username
 	}
-	g, err := user.LookupGroupId(strconv.Itoa(int(fileStats.Gid)))
-	if err == nil {
+	if g, err := user.LookupGroupId(strconv.Itoa(int(fileStats.Gid))); err == nil {
 		group = g.Name
 	}
 
-	fmt.Printf("%s %d %s %s %d %s %s\n",
-		modeString(fileStats.Mode),
-		fileStats.Nlink,
+	return modeString(fileStats.Mode), fileStats.Nlink, owner, group, fileInfo.Size(), fileInfo.ModTime().Format("Jan _2 15:04")
+}
+
+func printLong(dir, name string) {
+	modestr, nlink, owner, group, fsize, mtime := getLong(dir, name)
+
+	fmt.Printf("%s %[2]*d %[4]*s %[6]*s %[8]*d %[10]*s %s\n",
+		modestr,
+		nlinkWidth, // 2
+		nlink,
+		ownerWidth, // 4
 		owner,
+		groupWidth, // 6
 		group,
-		fileInfo.Size(),
-		fileInfo.ModTime().Format("Jan _2 15:04"),
+		fsizeWidth, // 8
+		fsize,
+		mtimeWidth, // 10
+		mtime,
 		name)
 }
