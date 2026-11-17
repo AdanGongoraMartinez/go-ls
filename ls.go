@@ -68,7 +68,7 @@ func main() {
 
 func setWidths(dir string, names []string) {
 	for _, name := range names {
-		_, nlink, owner, group, fsize, mtime := getLong(dir, name)
+		_, nlink, owner, group, fsize, mtime := getLong(dir, &name)
 		nlinkWidth = max(nlinkWidth, len(strconv.Itoa(int(nlink))))
 		ownerWidth = max(ownerWidth, len(owner))
 		groupWidth = max(groupWidth, len(group))
@@ -97,10 +97,11 @@ func modeString(mode uint32) string {
 	return string(s[:1]) + os.FileMode(mode).Perm().String()[1:]
 }
 
-func getLong(dir, name string) (modestr string, nlink uint64, owner, group string, fsize int64, mtime string) {
-	fileInfo, err := os.Lstat(filepath.Join(dir, name))
+func getLong(dir string, name *string) (modestr string, nlink uint64, owner, group string, fsize int64, mtime string) {
+	fullpath := filepath.Join(dir, *name)
+	fileInfo, err := os.Lstat(fullpath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", *name, err)
 		return
 	}
 
@@ -115,23 +116,26 @@ func getLong(dir, name string) (modestr string, nlink uint64, owner, group strin
 		group = g.Name
 	}
 
+	if fileStats.Mode&syscall.S_IFLNK == syscall.S_IFLNK {
+		target, err := os.Readlink(fullpath)
+		if err != nil {
+			*name += " -> " + target
+		}
+	}
+
 	return modeString(fileStats.Mode), fileStats.Nlink, owner, group, fileInfo.Size(), fileInfo.ModTime().Format("Jan _2 15:04")
 }
 
 func printLong(dir, name string) {
-	modestr, nlink, owner, group, fsize, mtime := getLong(dir, name)
+	modestr, nlink, owner, group, fsize, mtime := getLong(dir, &name)
 
-	fmt.Printf("%s %[2]*d %[4]*s %[6]*s %[8]*d %[10]*s %s\n",
+	fmt.Printf("%s %*d %*s %*s %*d %*s %s\n",
 		modestr,
-		nlinkWidth, // 2
-		nlink,
-		ownerWidth, // 4
-		owner,
-		groupWidth, // 6
-		group,
-		fsizeWidth, // 8
-		fsize,
-		mtimeWidth, // 10
-		mtime,
-		name)
+		nlinkWidth, nlink,
+		ownerWidth, owner,
+		groupWidth, group,
+		fsizeWidth, fsize,
+		mtimeWidth, mtime,
+		name,
+	)
 }
