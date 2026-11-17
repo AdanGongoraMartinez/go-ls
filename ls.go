@@ -156,7 +156,7 @@ func renderShort(w io.Writer, entries []Entry) {
 			continue
 		}
 
-		fmt.Fprintf(w, "%s  ", e.Name)
+		fmt.Fprintf(w, "%s\n", e.Name)
 	}
 }
 
