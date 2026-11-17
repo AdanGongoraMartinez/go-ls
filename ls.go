@@ -118,7 +118,7 @@ func getLong(dir string, name *string) (modestr string, nlink uint64, owner, gro
 
 	if fileStats.Mode&syscall.S_IFLNK == syscall.S_IFLNK {
 		target, err := os.Readlink(fullpath)
-		if err != nil {
+		if err == nil {
 			*name += " -> " + target
 		}
 	}
