@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 func main() {
 	path := "."
 	showAll := false
+	longFormat := false
 
 	for _, arg := range os.Args[1:] {
 		if !strings.HasPrefix(arg, "-") {
@@ -20,8 +22,10 @@ func main() {
 			switch char {
 			case 'a':
 				showAll = true
+			case 'l':
+				longFormat = true
 			default:
-				fmt.Fprint(os.Stderr, "usage: %s [-a] [path]\n", os.Args[0])
+				fmt.Fprintf(os.Stderr, "usage: %s [-a] [path]\n", os.Args[0])
 				os.Exit(1)
 			}
 		}
@@ -46,6 +50,19 @@ func main() {
 	}
 
 	for _, name := range names {
-		fmt.Println(name)
+		if longFormat {
+			printLong(path, name)
+		} else {
+			fmt.Println(name)
+		}
 	}
+}
+
+func printLong(dir, name string) {
+	fileInfo, err := os.Lstat(filepath.Join(dir, name))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
+		return
+	}
+	fmt.Println(fileInfo.Size(), name)
 }
