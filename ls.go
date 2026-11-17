@@ -77,24 +77,53 @@ func setWidths(dir string, names []string) {
 	}
 }
 
-func modeString(mode uint32) string {
-	var s [10]byte
-	modes := map[uint32]rune{
-		syscall.S_IFDIR:  'd',
-		syscall.S_IFLNK:  'l',
-		syscall.S_IFCHR:  'c',
-		syscall.S_IFBLK:  'b',
-		syscall.S_IFIFO:  'p',
-		syscall.S_IFSOCK: 's',
+func modeString(m os.FileMode) string {
+	var b [10]byte
+	b[0] = '-'
+	switch {
+	case m.IsDir():
+		b[0] = 'd'
+	case m&os.ModeSymlink != 0:
+		b[0] = 'l'
+	case m&os.ModeCharDevice != 0:
+		b[0] = 'c'
+	case m&os.ModeDevice != 0:
+		b[0] = 'b'
+	case m&os.ModeNamedPipe != 0:
+		b[0] = 'p'
+	case m&os.ModeSocket != 0:
+		b[0] = 's'
 	}
 
-	if r, ok := modes[mode&syscall.S_IFMT]; ok {
-		s[0] = byte(r)
-	} else {
-		s[0] = '-'
+	const rwx = "rwxrwxrwx"
+	for i := range 9 {
+		if m&(1<<uint(8-i)) != 0 {
+			b[i+1] = rwx[i]
+		} else {
+			b[i+1] = '-'
+		}
 	}
 
-	return string(s[:1]) + os.FileMode(mode).Perm().String()[1:]
+	if m&os.ModeSetuid != 0 {
+		b[3] = pick(b[3], 'x', 's', 'S')
+	}
+	if m&os.ModeSetgid != 0 {
+		b[6] = pick(b[6], 'x', 's', 'S')
+	}
+	if m&os.ModeSticky != 0 {
+		b[9] = pick(b[9], 'x', 't', 'T')
+	}
+
+	return string(b[:])
+}
+
+// pick devuelve el carácter "con bit" si el permiso de ejecución estaba prendido,
+// o el "sin bit" (mayúscula) si no lo estaba.
+func pick(actual, conExec, conBit, sinBit byte) byte {
+	if actual == conExec {
+		return conBit
+	}
+	return sinBit
 }
 
 func getLong(dir string, name *string) (modestr string, nlink uint64, owner, group string, fsize int64, mtime string) {
@@ -123,7 +152,7 @@ func getLong(dir string, name *string) (modestr string, nlink uint64, owner, gro
 		}
 	}
 
-	return modeString(fileStats.Mode), fileStats.Nlink, owner, group, fileInfo.Size(), fileInfo.ModTime().Format("Jan _2 15:04")
+	return modeString(fileInfo.Mode()), fileStats.Nlink, owner, group, fileInfo.Size(), fileInfo.ModTime().Format("Jan _2 15:04")
 }
 
 func printLong(dir, name string) {
