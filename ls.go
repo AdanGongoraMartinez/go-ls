@@ -118,6 +118,11 @@ func readEntries(dir string, opts options) ([]Entry, error) {
 			continue
 		}
 		e := Entry{Name: de.Name()}
+		if !opts.long {
+			out = append(out, e)
+			continue
+		}
+
 		info, err := de.Info() // 1 solo Lstat por entrada, no 2
 		if err != nil {
 			e.Err = err
