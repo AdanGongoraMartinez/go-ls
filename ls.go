@@ -104,6 +104,21 @@ func pick(actual, conExec, conBit, sinBit byte) byte {
 	return sinBit
 }
 
+func newEntry(name string, info os.FileInfo, dir string, ids *idCache) Entry {
+	e := Entry{Name: name, Mode: info.Mode(), Size: info.Size(), Mtime: info.ModTime()}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		e.Nlink = st.Nlink
+		e.Owner = ids.userName(st.Uid)
+		e.Group = ids.groupName(st.Gid)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		if target, err := os.Readlink(filepath.Join(dir, name)); err == nil {
+			e.Link = target
+		}
+	}
+	return e
+}
+
 func readEntries(dir string, opts options) ([]Entry, error) {
 	dirents, err := os.ReadDir(dir)
 	if err != nil {
@@ -112,6 +127,21 @@ func readEntries(dir string, opts options) ([]Entry, error) {
 
 	ids := &idCache{users: map[uint32]string{}, groups: map[uint32]string{}}
 	out := make([]Entry, 0, len(dirents)+2)
+
+	// . and .. for -a
+	if opts.all {
+		for _, n := range []string{".", ".."} {
+			if !opts.long {
+				out = append(out, Entry{Name: n})
+				continue
+			}
+			info, err := os.Lstat(filepath.Join(dir, n))
+			if err != nil {
+				continue
+			}
+			out = append(out, newEntry(n, info, dir, ids))
+		}
+	}
 
 	for _, de := range dirents {
 		if !opts.all && strings.HasPrefix(de.Name(), ".") {
