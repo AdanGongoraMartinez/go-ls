@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 func main() {
@@ -64,5 +65,12 @@ func printLong(dir, name string) {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 		return
 	}
-	fmt.Println(fileInfo.Size(), name)
+	fileStats := fileInfo.Sys().(*syscall.Stat_t)
+	fmt.Println(
+		fileInfo.Mode().String(),
+		fileStats.Nlink,
+		fileStats.Uid,
+		fileStats.Gid,
+		fileInfo.Size(),
+		name)
 }
