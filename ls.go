@@ -10,6 +10,14 @@ func main() {
 	if len(os.Args) > 1 {
 		path = os.Args[1]
 	}
-	entries, _ := os.ReadDir(path)
-	fmt.Println(entries)
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	for _, entry := range entries {
+		fmt.Println(entry.Name())
+	}
 }
