@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -86,12 +88,24 @@ func printLong(dir, name string) {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 		return
 	}
+
 	fileStats := fileInfo.Sys().(*syscall.Stat_t)
+
+	owner, group := "?", "?"
+	u, err := user.LookupId(strconv.Itoa(int(fileStats.Uid)))
+	if err == nil {
+		owner = u.Username
+	}
+	g, err := user.LookupGroupId(strconv.Itoa(int(fileStats.Gid)))
+	if err == nil {
+		group = g.Name
+	}
+
 	fmt.Println(
 		modeString(fileStats.Mode),
 		fileStats.Nlink,
-		fileStats.Uid,
-		fileStats.Gid,
+		owner,
+		group,
 		fileInfo.Size(),
 		name)
 }
