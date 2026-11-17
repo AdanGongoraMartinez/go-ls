@@ -33,10 +33,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	var names []string
+	if showAll {
+		names = append(names, ".", "..")
+	}
+
 	for _, entry := range entries {
 		if !showAll && strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		fmt.Println(entry.Name())
+		names = append(names, entry.Name())
+	}
+
+	for _, name := range names {
+		fmt.Println(name)
 	}
 }
